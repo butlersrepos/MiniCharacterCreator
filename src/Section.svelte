@@ -2,10 +2,10 @@
 	import { createEventDispatcher } from "svelte";
 	import { Accordion, Card, UnstyledButton } from "@svelteuidev/core";
 	import Display from "./Display.svelte";
-	import type { fs } from "@tauri-apps/api";
+	import type { FileEntry } from "./fileSystem";
 	export let selected: { path: string; index: number }[];
 	export let name: string;
-	export let children: fs.FileEntry[];
+	export let children: FileEntry[];
 	export let index = 0;
 
 	const dispatch = createEventDispatcher();
@@ -15,10 +15,10 @@
 	const sendSelected = (event: CustomEvent) => {
 		dispatch("selected", event.detail);
 	};
-	const isFinalDir = (entries: fs.FileEntry[]) => {
+	const isFinalDir = (entries: FileEntry[]) => {
 		return entries.every((entry) => !entry.children?.length);
 	};
-	const isImage = (entry: fs.FileEntry) => {
+	const isImage = (entry: FileEntry) => {
 		return entry.name?.includes("png");
 	};
 </script>

@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { fs } from "@tauri-apps/api";
-	import { getContext, onMount } from "svelte";
+	import { onMount } from "svelte";
 	import { loadImageFromPath } from "./loadImages";
 	export let path: string;
 	export let size: number = 64;

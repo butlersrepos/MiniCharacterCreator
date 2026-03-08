@@ -1,11 +1,11 @@
-import { fs } from "@tauri-apps/api";
+import { readFileByPath } from "./fileSystem";
 const images: Record<string, HTMLImageElement|HTMLCanvasElement> = {}
 export const urls: Record<string, string> = {}
 export const loadImageFromPath = (path: string) => {
 	if (images[path]) return images[path]
 	return new Promise<HTMLImageElement>(async (res) => {
-		const content = await fs.readBinaryFile(path);
-		const blob = new Blob([content.buffer], { type: "image/png" });
+		const content = await readFileByPath(path);
+		const blob = new Blob([content], { type: "image/png" });
 		const img = new Image();
 		const url = URL.createObjectURL(blob)
 		img.src = url

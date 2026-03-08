@@ -3,7 +3,14 @@
   import Display from "./Display.svelte";
   import Section from "./Section.svelte";
   import DragDropList from "./DragDropList.svelte";
-  import { dialog, fs, path } from "@tauri-apps/api";
+  import {
+    type FileEntry,
+    pickDirectory,
+    readDirectory,
+    saveFile,
+    storeHandle,
+    tryRestoreHandle,
+  } from "./fileSystem";
   import { localStorageData } from "./localStorageData";
   import { loadImageFromPath, overwriteImage } from "./loadImages";
   import {
@@ -46,25 +53,31 @@
   const characterName = localStorageData("characterName", "");
   const targetDirectory = localStorageData("targetDir", "");
 
-  let rootFolder: fs.FileEntry[] = [];
+  let rootFolder: FileEntry[] = [];
   const rootDir = localStorageData("root", "");
-  let weaponsFolder: fs.FileEntry[] = [];
+  let rootDirHandle: FileSystemDirectoryHandle | null = null;
+  let weaponsFolder: FileEntry[] = [];
   const weaponsDir = localStorageData("weaponsDir", "");
-  let crafting1Folder: fs.FileEntry[] = [];
+  let weaponsDirHandle: FileSystemDirectoryHandle | null = null;
+  let crafting1Folder: FileEntry[] = [];
   const crafting1Dir = localStorageData("crafting1", "");
-  let crafting2Folder: fs.FileEntry[] = [];
+  let crafting1DirHandle: FileSystemDirectoryHandle | null = null;
+  let crafting2Folder: FileEntry[] = [];
   const crafting2Dir = localStorageData("crafting2", "");
-  let addonsFolder: fs.FileEntry[] = [];
+  let crafting2DirHandle: FileSystemDirectoryHandle | null = null;
+  let addonsFolder: FileEntry[] = [];
   const addonsDir = localStorageData("addons", "");
+  let addonsDirHandle: FileSystemDirectoryHandle | null = null;
+  let targetDirHandle: FileSystemDirectoryHandle | null = null;
 
   const loadTree = async () => {
-    rootFolder = await fs.readDir(rootDir.value, { recursive: true });
+    if (!rootDirHandle) return;
+    rootFolder = await readDirectory(rootDirHandle);
   };
 
   const loadWeapons = async () => {
-    const loadedWeapons = await fs.readDir(weaponsDir.value, {
-      recursive: true,
-    });
+    if (!weaponsDirHandle) return;
+    const loadedWeapons = await readDirectory(weaponsDirHandle);
     weaponsFolder = loadedWeapons.map((x) => {
       if (x.name?.includes("Swing")) {
         const newChildren = x.children?.map((c) => {
@@ -78,7 +91,7 @@
             };
           }
           return c;
-        }) as fs.FileEntry[];
+        }) as FileEntry[];
 
         return { ...x, children: newChildren };
       }
@@ -86,90 +99,113 @@
     });
   };
   const loadCrafting1 = async () => {
-    crafting1Folder = await fs.readDir(crafting1Dir.value, { recursive: true });
+    if (!crafting1DirHandle) return;
+    crafting1Folder = await readDirectory(crafting1DirHandle);
   };
   const loadCrafting2 = async () => {
-    crafting2Folder = await fs.readDir(crafting2Dir.value, { recursive: true });
+    if (!crafting2DirHandle) return;
+    crafting2Folder = await readDirectory(crafting2DirHandle);
   };
   const loadAddons = async () => {
-    addonsFolder = await fs.readDir(addonsDir.value, { recursive: true });
+    if (!addonsDirHandle) return;
+    addonsFolder = await readDirectory(addonsDirHandle);
   };
   onMount(async () => {
-    if (!rootFolder.length && rootDir.value) {
+    // Try to restore previously selected directories from IndexedDB
+    rootDirHandle = await tryRestoreHandle("root");
+    if (rootDirHandle) {
+      rootDir.value = rootDirHandle.name;
       loadTree();
     }
-    if (!weaponsFolder.length && weaponsDir.value) {
+    weaponsDirHandle = await tryRestoreHandle("weapons");
+    if (weaponsDirHandle) {
+      weaponsDir.value = weaponsDirHandle.name;
       loadWeapons();
     }
-    if (!crafting1Folder.length && crafting1Dir.value) {
+    crafting1DirHandle = await tryRestoreHandle("crafting1");
+    if (crafting1DirHandle) {
+      crafting1Dir.value = crafting1DirHandle.name;
       loadCrafting1();
     }
-    if (!crafting2Folder.length && crafting2Dir.value) {
+    crafting2DirHandle = await tryRestoreHandle("crafting2");
+    if (crafting2DirHandle) {
+      crafting2Dir.value = crafting2DirHandle.name;
       loadCrafting2();
     }
-    if (!addonsFolder.length && addonsDir.value) {
+    addonsDirHandle = await tryRestoreHandle("addons");
+    if (addonsDirHandle) {
+      addonsDir.value = addonsDirHandle.name;
       loadAddons();
+    }
+    targetDirHandle = await tryRestoreHandle("target", "readwrite");
+    if (targetDirHandle) {
+      targetDirectory.value = targetDirHandle.name;
     }
   });
 
   const selectRootDirectory = async () => {
-    const dir = await dialog.open({
-      directory: true,
-      multiple: false,
-      recursive: true,
-    });
-    if (dir && typeof dir === "string") {
-      if (dir.split("\\").at(-1) === "Generic_NPCs") {
-        rootDir.value = dir;
+    const handle = await pickDirectory();
+    if (handle) {
+      if (handle.name === "Generic_NPCs") {
+        rootDirHandle = handle;
+        rootDir.value = handle.name;
+        await storeHandle("root", handle);
         loadTree();
       } else {
-        dialog.message(
+        alert(
           'The source directory is the one named "Generic_NPCs" and contain the animation folders',
         );
       }
     }
   };
   const selectWeaponsDir = async () => {
-    const dir = await dialog.open({ directory: true, multiple: false });
-    if (dir && typeof dir === "string") {
-      if (dir.split("\\").at(-1) === "Minifantasy_Weapons_Assets") {
-        weaponsDir.value = dir;
+    const handle = await pickDirectory();
+    if (handle) {
+      if (handle.name === "Minifantasy_Weapons_Assets") {
+        weaponsDirHandle = handle;
+        weaponsDir.value = handle.name;
+        await storeHandle("weapons", handle);
         loadWeapons();
       } else {
-        dialog.message(
+        alert(
           'The source directory is the one named "Minifantasy_Weapons_Assets"',
         );
       }
     }
   };
   const selectCrafting1Dir = async () => {
-    const dir = await dialog.open({ directory: true, multiple: false });
-    if (dir && typeof dir === "string") {
-      crafting1Dir.value = dir;
+    const handle = await pickDirectory();
+    if (handle) {
+      crafting1DirHandle = handle;
+      crafting1Dir.value = handle.name;
+      await storeHandle("crafting1", handle);
       loadCrafting1();
     }
   };
   const selectCrafting2Dir = async () => {
-    const dir = await dialog.open({ directory: true, multiple: false });
-    if (dir && typeof dir === "string") {
-      crafting2Dir.value = dir;
+    const handle = await pickDirectory();
+    if (handle) {
+      crafting2DirHandle = handle;
+      crafting2Dir.value = handle.name;
+      await storeHandle("crafting2", handle);
       loadCrafting2();
     }
   };
   const selectUnarmedDir = async () => {
-    const dir = await dialog.open({ directory: true, multiple: false });
-    if (dir && typeof dir === "string") {
-      addonsDir.value = dir;
+    const handle = await pickDirectory();
+    if (handle) {
+      addonsDirHandle = handle;
+      addonsDir.value = handle.name;
+      await storeHandle("addons", handle);
       loadAddons();
     }
   };
   const selectTargetDir = async () => {
-    const newTargetDir = await dialog.open({
-      directory: true,
-      multiple: false,
-    });
-    if (newTargetDir && typeof newTargetDir === "string") {
-      targetDirectory.value = newTargetDir;
+    const handle = await pickDirectory("readwrite");
+    if (handle) {
+      targetDirHandle = handle;
+      targetDirectory.value = handle.name;
+      await storeHandle("target", handle);
     }
   };
   const selectedAnimations = localStorageData<string[]>("weaponsSelected", []);
@@ -207,24 +243,21 @@
     buffer: HTMLCanvasElement,
     name: string = "NPC",
   ) => {
-    if (!targetDirectory) {
-      selectTargetDir();
+    if (!targetDirHandle) {
+      await selectTargetDir();
     }
-    if (targetDirectory) {
+    if (targetDirHandle) {
       const blob = await new Promise<Blob | null>((res) =>
         buffer.toBlob(res, "png"),
       );
       if (blob) {
-        await fs.writeBinaryFile(
-          targetDirectory.value + "/" + name + ".png",
-          await blob.arrayBuffer(),
-        );
+        await saveFile(targetDirHandle, name + ".png", blob);
       }
     }
   };
   $: race = selected.value
     .find((x) => x.path.includes("_Character"))
-    ?.path.split("\\")
+    ?.path.split(/[\\/]/)
     .at(-2) as "Elf" | "Human" | "Orc";
   $: baseColor = {
     Elf: "elfskin",
@@ -315,9 +348,11 @@
     const individualSprites: HTMLCanvasElement[] = [];
     const animations = rootFolder.filter((folder) => folder.children);
     if (!selected.value.some((x) => x.path.includes("_Character"))) {
-      return dialog.message(
+      loading = false;
+      alert(
         "at least one base character is needed to generate the animations",
       );
+      return;
     }
     for (const { name } of animations) {
       if (!name) return;
@@ -370,9 +405,9 @@
   };
 
   $: idle = rootFolder.find((x) => x.name === "Idle")?.children;
-  const findCharacterFolder = (folder: fs.FileEntry): fs.FileEntry | null => {
-    let found: fs.FileEntry | null = null;
-    const find = (folder: fs.FileEntry) => {
+  const findCharacterFolder = (folder: FileEntry): FileEntry | null => {
+    let found: FileEntry | null = null;
+    const find = (folder: FileEntry) => {
       if (folder.children) {
         for (const children of folder.children) {
           if (children.name?.includes("Character")) {
@@ -387,7 +422,7 @@
     return found;
   };
 
-  const getWeaponsEntries = (folders: fs.FileEntry[]) => {
+  const getWeaponsEntries = (folders: FileEntry[]) => {
     return folders.filter(
       (f) =>
         "children" in f &&
@@ -401,7 +436,7 @@
     more: animationData[];
     name: string;
   };
-  const findImagePath = (folder: fs.FileEntry, key: string) =>
+  const findImagePath = (folder: FileEntry, key: string) =>
     folder?.children?.find((x) => x.name?.split(/[_.]/).at(-2) === key)?.path;
 
   const getAnimationData = () => {
@@ -560,7 +595,7 @@
       }
     }
   };
-  const randomSingle = (files: fs.FileEntry[] | undefined, piece: string) => {
+  const randomSingle = (files: FileEntry[] | undefined, piece: string) => {
     if (!files) return;
     files = files.filter((x) => !selected.value.some((y) => y.path === x.path));
     let randomSelected = files[Math.floor(Math.random() * files?.length)];

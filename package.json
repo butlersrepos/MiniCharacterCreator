@@ -5,14 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "tauri": "tauri",
+
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^2.4.2",
-    "@tauri-apps/cli": "^1.4.0",
+
     "@tsconfig/svelte": "^5.0.0",
     "svelte": "^4.2.1",
     "svelte-check": "^3.4.6",
@@ -24,7 +24,8 @@
     "@fortawesome/free-solid-svg-icons": "^6.4.2",
     "@svelteuidev/composables": "^0.15.3",
     "@svelteuidev/core": "^0.15.3",
-    "@tauri-apps/api": "^1.4.0",
+
     "svelte-fa": "^3.0.4"
-  }
+  },
+  "packageManager": "pnpm@10.8.0+sha512.0e82714d1b5b43c74610193cb20734897c1d00de89d0e18420aebc5977fa13d780a9cb05734624e81ebd81cc876cd464794850641c48b9544326b5622ca29971"
 }
