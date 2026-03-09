@@ -60,6 +60,14 @@
 
   const characterName = localStorageData("characterName", "");
 
+  // Non-Chrome browser banner
+  const isChrome = /Chrome\//.test(navigator.userAgent) && !/Edg\//.test(navigator.userAgent);
+  let browserBannerDismissed = !!(sessionStorage.getItem("browserBannerDismissed"));
+  const dismissBrowserBanner = () => {
+    browserBannerDismissed = true;
+    sessionStorage.setItem("browserBannerDismissed", "1");
+  };
+
   // Track drawer expanded state for reactive margins
   let leftDrawerExpanded = localStorageData("configDrawerExpanded", true).value;
   let rightDrawerExpanded = localStorageData("generationDrawerExpanded", true).value;
@@ -1053,6 +1061,12 @@
       directories={directoryConfigs}
     />
     <div class="center-section" style="margin-left:{leftMargin}px;margin-right:{rightMargin}px;">
+      {#if !isChrome && !browserBannerDismissed}
+        <div class="browser-banner">
+          <span>Chrome is recommended for the best experience. Other browsers require re-selecting asset folders each visit.</span>
+          <button class="banner-dismiss" on:click={dismissBrowserBanner}><Fa icon={faTimes} size="xs" /></button>
+        </div>
+      {/if}
       <!-- TOP BAR -->
       <div class="top-bar">
         <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
@@ -1337,6 +1351,38 @@
     gap: 0.75rem;
     overflow: hidden;
     transition: margin 0.2s ease;
+  }
+
+  /* Browser compatibility banner */
+  .browser-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.35rem 0.75rem;
+    background: linear-gradient(90deg, var(--theme-warning), #e07020);
+    color: #1a1a1a;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .banner-dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.15);
+    color: #1a1a1a;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .banner-dismiss:hover {
+    background: rgba(0, 0, 0, 0.3);
   }
 
   /* Top bar */
