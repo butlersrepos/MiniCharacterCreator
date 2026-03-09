@@ -5,7 +5,6 @@
 
   color-scheme: dark;
 
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -13,14 +12,14 @@
   -webkit-text-size-adjust: 100%;
 }
 
-
-
 body {
   margin: 0;
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
   overflow-y: hidden;
+  background: var(--theme-app-bg, #1a1b1e);
+  color: var(--theme-text-primary, #c1c2c5);
 }
 
 #app {
@@ -30,3 +29,40 @@ body {
   text-align: center;
 }
 
+/* SvelteUI overrides to respect theme */
+:root .svelteui-Card-root {
+  background-color: var(--theme-panel-bg) !important;
+  border-color: var(--theme-border) !important;
+}
+:root .svelteui-Button-root[data-svelteui-color="gray"] {
+  background-color: var(--theme-secondary-btn) !important;
+  color: var(--theme-secondary-btn-text) !important;
+}
+:root .svelteui-Button-root[data-svelteui-color="gray"]:hover {
+  background-color: var(--theme-secondary-btn-hover) !important;
+}
+:root .svelteui-Tabs-tab[data-active="true"] {
+  border-color: var(--theme-accent) !important;
+  color: var(--theme-text-primary) !important;
+}
+:root .svelteui-AccordionItem-control {
+  color: var(--theme-text-primary) !important;
+}
+/* Chip overrides */
+:root .svelteui-Chip-label {
+  color: var(--theme-text-primary) !important;
+}
+:root .svelteui-Chip-label.filled {
+  background-color: var(--theme-secondary-btn) !important;
+  border-color: var(--theme-border) !important;
+}
+:root .svelteui-Chip-label.filled:hover {
+  background-color: var(--theme-secondary-btn-hover) !important;
+}
+:root .svelteui-Chip-label.filled.checked {
+  background-color: var(--theme-primary-btn) !important;
+  color: var(--theme-primary-btn-text) !important;
+}
+:root .svelteui-Chip-label.filled.checked:hover {
+  background-color: var(--theme-primary-btn-hover) !important;
+}

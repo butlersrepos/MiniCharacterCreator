@@ -3,6 +3,10 @@
   import Display from "./Display.svelte";
   import Section from "./Section.svelte";
   import DragDropList from "./DragDropList.svelte";
+  import ConfigDrawer from "./ConfigDrawer.svelte";
+  import GenerationDrawer from "./GenerationDrawer.svelte";
+  import SettingsMenu from "./SettingsMenu.svelte";
+  import { applyTheme, theme } from "./theme";
   import {
     type FileEntry,
     pickDirectory,
@@ -14,7 +18,6 @@
   import { localStorageData } from "./localStorageData";
   import { loadImageFromPath, overwriteImage } from "./loadImages";
   import {
-    ActionIcon,
     Button,
     Card,
     Checkbox,
@@ -29,14 +32,15 @@
   } from "@svelteuidev/core";
   import Fa from "svelte-fa";
   import {
-    faFolderOpen,
     faFileExport,
-    faFileArrowDown,
     faTrash,
     faTimes,
     faSpinner,
+    faCheck,
     faCheckCircle,
     faDice,
+    faMinus,
+    faCopy,
   } from "@fortawesome/free-solid-svg-icons";
   import {
     getPalette,
@@ -111,6 +115,7 @@
     addonsFolder = await readDirectory(addonsDirHandle);
   };
   onMount(async () => {
+    applyTheme(theme.value);
     // Try to restore previously selected directories from IndexedDB
     rootDirHandle = await tryRestoreHandle("root");
     if (rootDirHandle) {
@@ -539,14 +544,187 @@
     }
     return result;
   };
-  let buttons;
-  let buttonsLeft: HTMLDivElement | null = null;
   let loading = false;
   let finished = false;
-  $: crafting = [
-    [crafting1Dir, 1, selectCrafting1Dir, crafting1Folder],
-    [crafting2Dir, 2, selectCrafting2Dir, crafting2Folder],
-  ] as const;
+  let layerTooltipPath: string | null = null;
+  let layerTooltip: { tab: string; category: string; item: string; fullPath: string; copied: boolean; x: number; y: number } | null = null;
+
+  const folderToTab: Record<string, string> = {
+    _Characters: "Bodies",
+    Head: "Hair/Headwear",
+    Body: "Clothing",
+  };
+
+  function showLayerTooltip(e: MouseEvent, item: { path: string; name: string }) {
+    if (layerTooltipPath === item.path) {
+      layerTooltipPath = null;
+      layerTooltip = null;
+      return;
+    }
+    const el = (e.currentTarget as HTMLElement);
+    const rect = el.getBoundingClientRect();
+    layerTooltipPath = item.path;
+    const parts = item.path.split('/');
+    const tab = folderToTab[parts[0]] ?? parts[0];
+    const afterCategory = parts.slice(1);
+    const label = afterCategory
+      .map((p) => p.replace(/\.png$/i, ''))
+      .join(' / ');
+    const fullPath = rootDir.value ? `${rootDir.value}/${item.path}` : item.path;
+    layerTooltip = {
+      category: item.name,
+      tab,
+      item: label,
+      fullPath,
+      copied: false,
+      x: rect.left + rect.width / 2,
+      y: rect.top,
+    };
+  }
+
+  function copyLayerPath() {
+    if (!layerTooltip) return;
+    navigator.clipboard.writeText(layerTooltip.fullPath);
+    layerTooltip = { ...layerTooltip, copied: true };
+    setTimeout(() => {
+      if (layerTooltip) layerTooltip = { ...layerTooltip, copied: false };
+    }, 1500);
+  }
+  $: directoryConfigs = [
+    {
+      key: "root",
+      label: "NPC Assets",
+      description:
+        "Select the Generic_NPCs folder from the Minifantasy Myriad of NPCs asset pack.",
+      links: [
+        {
+          label: "Minifantasy NPCs on itch.io",
+          url: "https://krishna-palacio.itch.io/minifantasy-npcs",
+        },
+      ],
+      value: rootDir.value,
+      required: true,
+      onSelect: selectRootDirectory,
+    },
+    {
+      key: "target",
+      label: "Output Directory",
+      description: "Choose where generated sprite sheets will be saved.",
+      links: [],
+      value: targetDirectory.value,
+      required: true,
+      onSelect: selectTargetDir,
+    },
+    {
+      key: "weapons",
+      label: "Weapon Assets",
+      description:
+        "Select the Minifantasy_Weapons_Assets folder for weapon animations.",
+      links: [
+        {
+          label: "Minifantasy Weapons on itch.io",
+          url: "https://krishna-palacio.itch.io/minifantasy-weapons",
+        },
+      ],
+      value: weaponsDir.value,
+      required: false,
+      onSelect: selectWeaponsDir,
+    },
+    {
+      key: "addons",
+      label: "Addon Assets",
+      description:
+        "Additional weapon animation packs (unarmed, magic weapons, etc).",
+      links: [
+        {
+          label: "Magic Weapons & Effects",
+          url: "https://krishna-palacio.itch.io/minifantasy-magic-weapons-and-effects",
+        },
+        {
+          label: "Exclusive Weapon Addons (Patreon)",
+          url: "https://www.patreon.com/posts/exclusive-weapon-59316645",
+        },
+      ],
+      value: addonsDir.value,
+      required: false,
+      onSelect: selectUnarmedDir,
+    },
+    {
+      key: "crafting1",
+      label: "Crafting I",
+      description: "Crafting & Professions I animation pack.",
+      links: [
+        {
+          label: "Crafting & Professions I on itch.io",
+          url: "https://krishna-palacio.itch.io/minifantasy-crafting-and-professions-i",
+        },
+      ],
+      value: crafting1Dir.value,
+      required: false,
+      onSelect: selectCrafting1Dir,
+    },
+    {
+      key: "crafting2",
+      label: "Crafting II",
+      description: "Crafting & Professions II animation pack.",
+      links: [
+        {
+          label: "Crafting & Professions II on itch.io",
+          url: "https://krishna-palacio.itch.io/minifantasy-crafting-and-professions-ii",
+        },
+      ],
+      value: crafting2Dir.value,
+      required: false,
+      onSelect: selectCrafting2Dir,
+    },
+  ];
+  // Animation selection counts
+  const getAllWeaponNames = (folders: FileEntry[]) => {
+    const names: string[] = [];
+    for (const { name, children } of folders) {
+      if (name && children) {
+        for (const w of getWeaponsEntries(children)) {
+          if (w.name) names.push(w.name);
+        }
+      }
+    }
+    return names;
+  };
+  $: weaponAnimNames = [
+    ...getAllWeaponNames(weaponsFolder.filter((x) => !x.name?.includes("harged"))),
+    ...getAllWeaponNames(addonsFolder.filter((x) => !x.name?.includes("Diag"))),
+  ];
+  $: weaponsSelectedCount = weaponAnimNames.filter((n) => selectedAnimations.value.includes(n)).length;
+  $: craftingAnimNames = (() => {
+    const names: string[] = [];
+    for (const folder of [crafting1Folder, crafting2Folder]) {
+      for (const prof of folder.filter((x) => x.name?.includes("Prof") && x?.children)) {
+        if (prof.name && prof.children) {
+          for (const w of getWeaponsEntries(prof.children).filter(findCharacterFolder)) {
+            if (w.name) names.push(w.name);
+          }
+        }
+      }
+    }
+    return names;
+  })();
+  $: craftingSelectedCount = craftingAnimNames.filter((n) => selectedAnimations.value.includes(n)).length;
+
+  // Animation tab state & toggle logic
+  let activeAnimTab: "weapons" | "crafting" = "weapons";
+  $: allAnimNames = [...weaponAnimNames, ...craftingAnimNames];
+  $: allAnimSelectedCount = allAnimNames.filter((n) => selectedAnimations.value.includes(n)).length;
+
+  const toggleAnimGroup = (names: string[]) => {
+    const allSelected = names.length > 0 && names.every((n) => selectedAnimations.value.includes(n));
+    if (allSelected) {
+      selectedAnimations.value = selectedAnimations.value.filter((n) => !names.includes(n));
+    } else {
+      const toAdd = names.filter((n) => !selectedAnimations.value.includes(n));
+      selectedAnimations.value = [...selectedAnimations.value, ...toAdd];
+    }
+  };
+
   // Random Menu
   let reference: HTMLButtonElement;
   let showRandomMenu = false;
@@ -555,13 +733,42 @@
     Body: [],
     _Characters: [],
   });
+  const allRandomCategories = [["Bodies", "_Characters"], ["Hair/Headwear", "Head"], ["Clothing", "Body"]] as const;
+  const selectAllRandom = () => {
+    if (!idle) return;
+    const newRandom: Record<string, string[]> = {};
+    for (const [, name] of allRandomCategories) {
+      const children = idle.find((x) => x.name === name)?.children ?? [];
+      newRandom[name] = children.filter((c) => c.name).map((c) => c.name!);
+    }
+    random.value = newRandom;
+  };
+  const deselectAllRandom = () => {
+    random.value = { Head: [], Body: [], _Characters: [] };
+  };
+  $: allSelected = idle
+    ? allRandomCategories.every(([, name]) => {
+        const children = idle!.find((x) => x.name === name)?.children ?? [];
+        const available = children.filter((c) => c.name).map((c) => c.name!);
+        return available.length > 0 && available.every((n) => random.value[name]?.includes(n));
+      })
+    : false;
+  const singleSelectCategories = ["_Characters"];
   const addRandom = (place: string, piece: string) => {
-    random.value = {
-      ...random.value,
-      [place]: random.value[place].includes(piece)
-        ? random.value[place].filter((x) => x !== piece)
-        : [...random.value[place], piece],
-    };
+    if (singleSelectCategories.includes(place)) {
+      // Radio-style: select this one or deselect if already selected
+      random.value = {
+        ...random.value,
+        [place]: random.value[place].includes(piece) ? [] : [piece],
+      };
+    } else {
+      random.value = {
+        ...random.value,
+        [place]: random.value[place].includes(piece)
+          ? random.value[place].filter((x) => x !== piece)
+          : [...random.value[place], piece],
+      };
+    }
   };
   const generateRandom = () => {
     for (const [place, pieces] of Object.entries(random.value)) {
@@ -595,6 +802,11 @@
       }
     }
   };
+  const randomizeName = () => {
+    const prefixes = ["Ael", "Bor", "Cael", "Dar", "El", "Fen", "Gor", "Hal", "Ith", "Jar", "Kel", "Lor", "Mor", "Nar", "Orin", "Per", "Ren", "Sor", "Tor", "Val", "Wyr", "Zeph"];
+    const suffixes = ["an", "ith", "or", "us", "en", "ar", "is", "on", "iel", "ath", "ir", "ak", "im", "os", "wyn", "dor", "ric", "thar", "ven"];
+    characterName.value = prefixes[Math.floor(Math.random() * prefixes.length)] + suffixes[Math.floor(Math.random() * suffixes.length)];
+  };
   const randomSingle = (files: FileEntry[] | undefined, piece: string) => {
     if (!files) return;
     files = files.filter((x) => !selected.value.some((y) => y.path === x.path));
@@ -618,22 +830,53 @@
   };
 </script>
 
+<svelte:window on:click={() => { if (showRandomMenu) showRandomMenu = false; layerTooltipPath = null; layerTooltip = null; }} />
 <SvelteUIProvider themeObserver="dark">
-  <Popper {reference} mounted={showRandomMenu}>
-    <Card style="display:grid;gap:0.5rem">
+  <Popper {reference} mounted={showRandomMenu} zIndex={20}>
+    <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+    <div on:click|stopPropagation>
+    <Card style="display:grid;gap:0.5rem;max-height:70vh;overflow-y:auto;max-width:260px;padding:1rem;border:1px solid var(--theme-border)">
+      <Button on:click={generateRandom} style="width:100%">
+        <Fa slot="leftIcon" icon={faDice} />
+        Randomize Selected
+      </Button>
+      <Button
+        size="xs"
+        compact
+        color="gray"
+        on:click={allSelected ? deselectAllRandom : selectAllRandom}
+        style="width:100%"
+      >
+        {allSelected ? "Deselect All" : "Select All"}
+      </Button>
+      <Text size="xs" color="dimmed" style="line-height:1.3">
+        Checked items will be randomized when you click the button above. Use the dice icon to randomize a single item.
+      </Text>
       {#if idle}
-        {#each [["Head", "Head"], ["Characters", "_Characters"], ["Body", "Body"]] as [label, name]}
-          <Text size="sm" weight="bold">{label}</Text>
+        {#each allRandomCategories as [label, name]}
+          <Text size="sm" weight="bold">{label}{singleSelectCategories.includes(name) ? " (pick one)" : ""}</Text>
           {#each idle.find((x) => x.name === name)?.children ?? [] as child}
             {#if child.name}
               <div
                 style="margin-left:1rem;display:flex;justify-content:space-between"
               >
-                <Checkbox
-                  label={child.name}
-                  checked={random.value[name].includes(child.name)}
-                  on:click={addRandom(name, child.name)}
-                ></Checkbox>
+                {#if singleSelectCategories.includes(name)}
+                  <label class="radio-row">
+                    <input
+                      type="radio"
+                      name="random-{name}"
+                      checked={random.value[name].includes(child.name)}
+                      on:click={() => addRandom(name, child.name)}
+                    />
+                    {child.name}
+                  </label>
+                {:else}
+                  <Checkbox
+                    label={child.name}
+                    checked={random.value[name].includes(child.name)}
+                    on:click={addRandom(name, child.name)}
+                  ></Checkbox>
+                {/if}
                 <Button
                   size="sm"
                   compact
@@ -647,93 +890,67 @@
           {/each}
         {/each}
       {/if}
-      <Button on:click={generateRandom} style="margin:auto">Generate</Button>
     </Card>
-  </Popper>
-  <div
-    style="display:grid;grid-template-columns:400px 1fr auto 300px;gap:1rem;height:calc(100vh - 2rem);"
-  >
-    <!-- !CLOTHES -->
-    <div>
-      <div bind:this={buttonsLeft}>
-        <Button
-          color="gray"
-          on:click={selectRootDirectory}
-          style="background:{rootDir.value ? '' : 'red'};width:100%"
-        >
-          <Fa slot="leftIcon" icon={faFolderOpen} />
-          Select source directory<br />(Generic_NPCs)
-        </Button>
-      </div>
-      {#if idle}
-        <div
-          style="max-height:calc(100vh - 2rem - {buttonsLeft.clientHeight}px);overflow-y:auto"
-        >
-          <Tabs>
-            {#each [["Body", "Body"], ["Head", "Head"], ["Characters", "_Characters"]] as [label, name]}
-              <Tabs.Tab {label}>
-                {#if idle.find((x) => x.name === name)?.children}
-                  {#each idle.find((x) => x.name === name)?.children ?? [] as child}
-                    <div>
-                      <Section
-                        name={child.name ?? ""}
-                        children={child.children ?? []}
-                        on:selected={select}
-                        selected={selected.value}
-                      />
-                    </div>
-                  {/each}
-                {/if}
-              </Tabs.Tab>
-            {/each}
-          </Tabs>
-        </div>
-      {/if}
     </div>
-    <!-- !CONTROLS -->
-    <div
-      style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;height: 100%; place-items: center;"
-    >
-      <div>
-        <Group>
+  </Popper>
+  <div class="app-layout">
+    <ConfigDrawer directories={directoryConfigs} />
+    <div class="center-section">
+      <!-- TOP BAR -->
+      <div class="top-bar">
+        <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+        <div on:click|stopPropagation style="display:contents">
           <Button
-            color="gray"
-            on:click={selectTargetDir}
-            style="background:{targetDirectory.value ? '' : 'red'}"
+            bind:element={reference}
+            on:click={() => (showRandomMenu = !showRandomMenu)}
           >
-            <Fa slot="leftIcon" icon={faFileArrowDown} />
-            Select target directory
+            <Fa slot="leftIcon" icon={faDice} />
+            Randomize
           </Button>
+        </div>
+        <div class="name-group">
           <Input
             placeholder="Character name"
             style="padding:0.5rem"
             bind:value={characterName.value}
           />
-          <Button
-            bind:element={reference}
-            on:click={() => (showRandomMenu = !showRandomMenu)}
-            >Randomize</Button
-          >
-          <Button color="gray" on:click={generateSprites} style="margin:auto">
-            <Fa
-              slot="leftIcon"
-              icon={loading
-                ? faSpinner
-                : finished
-                  ? faCheckCircle
-                  : faFileExport}
-              color={finished ? "#33cc33" : ""}
-              pulse={loading}
-            />
-            Generate sprites
-          </Button>
-        </Group>
+          <button class="dice-btn" on:click={randomizeName} title="Random name">
+            <Fa icon={faDice} />
+          </button>
+        </div>
+        <SettingsMenu />
       </div>
-
+      <!-- PANELS -->
+      <div class="panels">
+        <!-- ITEMS PANEL -->
+        <div class="panel items-panel">
+          {#if idle}
+            <Tabs>
+              {#each [["Bodies", "_Characters"], ["Hair/Headwear", "Head"], ["Clothing", "Body"]] as [label, name]}
+                <Tabs.Tab {label}>
+                  {#if idle.find((x) => x.name === name)?.children}
+                    {#each idle.find((x) => x.name === name)?.children ?? [] as child}
+                      <div>
+                        <Section
+                          name={child.name ?? ""}
+                          children={child.children ?? []}
+                          on:selected={select}
+                          selected={selected.value}
+                        />
+                      </div>
+                    {/each}
+                  {/if}
+                </Tabs.Tab>
+              {/each}
+            </Tabs>
+          {/if}
+        </div>
+    <!-- CHARACTER PREVIEW -->
+    <div class="panel preview-panel">
       <Card
         shadow="xl"
         radius="xl"
-        style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;"
+        style="display:grid;grid-template-columns:1fr;grid-template-rows:auto 1fr;background:transparent;border:none;"
       >
         {#each selected.value as img}
           {#key img.path}
@@ -744,161 +961,187 @@
         {/each}
       </Card>
     </div>
-    <!-- !DISPLAY -->
-    <div
-      style="display:flex;flex-direction:column;height: 100%;font-size:0.8rem"
-    >
-      <div bind:this={buttons} style="display:grid;gap:0.2rem;">
-        <Button color="gray" on:click={() => (selected.value = [])}>
+    <!-- LAYER LIST -->
+    <div class="layers-panel">
+      <div class="layers-header">
+        <Button color="gray" size="sm" compact on:click={() => (selected.value = [])}>
           <Fa slot="leftIcon" icon={faTrash} />
-          Clear</Button
-        >
+          Clear
+        </Button>
       </div>
-      <div
-        style="max-height:calc(100vh - 2rem - {buttons?.clientHeight ??
-          0 + 10}px);overflow:auto"
-      >
+      <div class="layers-scroll">
         <DragDropList
           list={selected.value}
           let:item
           key="path"
           on:sort={sortList}
         >
-          <div style="display:grid;place-items:center">
-            <Card padding="xs" style="position:relative">
-              <ActionIcon
-                variant="outline"
-                size="xs"
-                style="position:absolute;top:0.2rem;right:0.2rem"
-                on:click={() => select({ detail: item })}
-              >
-                <Fa icon={faTimes} />
-              </ActionIcon>
-              <Display path={item.path} />
-            </Card>
+          <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+          <div
+            class="layer-item"
+            on:click|stopPropagation={(e) => showLayerTooltip(e, item)}
+          >
+            <button
+              class="layer-remove"
+              on:click|stopPropagation={() => select({ detail: item })}
+              title="Remove"
+            >
+              <Fa icon={faTimes} size="xs" />
+            </button>
+            <Display path={item.path} />
           </div>
         </DragDropList>
       </div>
     </div>
-    <!-- !TABS -->
-    <div style="font-size:0.8rem;overflow-y:auto">
-      <Text align="center" size="lg" weight="bold">Animations</Text>
-      <Tabs>
-        <!-- !WEAPONS -->
-        <Tabs.Tab label="Weapons">
-          <div style="display:flex;gap:0.5rem;flex-direction:column;">
-            <Button
-              color="gray"
-              on:click={selectWeaponsDir}
-              style="background:{weaponsDir.value ? '' : 'red'};width:100%"
-            >
-              <Fa slot="leftIcon" icon={faFolderOpen} />
-              Select source directory<br />(Weapons)
-            </Button>
-            <div style="display:grid;gap:1rem;grid-template-columns:1fr 1fr">
-              {#each weaponsFolder.filter((x) => !x.name?.includes("harged")) as { name, children }}
-                <Card shadow="sm" padding="md">
-                  <Card.Section first padding="xs">
-                    <h4>
-                      {name?.replaceAll("_", " ")}
-                    </h4>
-                  </Card.Section>
-                  <Group spacing="xs" direction="column">
-                    {#if name && children}
-                      {#each getWeaponsEntries(children) as weapon}
-                        <Chip
-                          size="xs"
-                          variant="filled"
-                          checked={weapon.name &&
-                            selectedAnimations.value.includes(weapon.name)}
+    </div> <!-- /panels -->
+    </div> <!-- /center-section -->
+    <!-- GENERATION DRAWER (right side) -->
+    <GenerationDrawer>
+      <Button on:click={generateSprites} style="width:100%;margin-bottom:0.75rem">
+        <Fa
+          slot="leftIcon"
+          icon={loading ? faSpinner : finished ? faCheckCircle : faFileExport}
+          color={finished ? "var(--theme-success)" : ""}
+          pulse={loading}
+        />
+        Generate Sprites
+      </Button>
+      <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+      <div class="section-heading-row">
+        <span class="tri-check" on:click={() => toggleAnimGroup(allAnimNames)}>
+          {#if allAnimNames.length > 0 && allAnimSelectedCount === allAnimNames.length}
+            <Fa icon={faCheck} size="xs" />
+          {:else if allAnimSelectedCount > 0}
+            <Fa icon={faMinus} size="xs" />
+          {/if}
+        </span>
+        <h4 class="section-heading" style="margin-top:0">Action Animations</h4>
+      </div>
+      <!-- Custom tabs with checkboxes -->
+      <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+      <div class="anim-tabs">
+        <button
+          class="anim-tab"
+          class:active={activeAnimTab === "weapons"}
+          on:click={() => (activeAnimTab = "weapons")}
+        >
+          <span class="tri-check" on:click|stopPropagation={() => toggleAnimGroup(weaponAnimNames)}>
+            {#if weaponAnimNames.length > 0 && weaponsSelectedCount === weaponAnimNames.length}
+              <Fa icon={faCheck} size="xs" />
+            {:else if weaponsSelectedCount > 0}
+              <Fa icon={faMinus} size="xs" />
+            {/if}
+          </span>
+          Weapons{weaponsSelectedCount ? ` (${weaponsSelectedCount})` : ""}
+        </button>
+        <button
+          class="anim-tab"
+          class:active={activeAnimTab === "crafting"}
+          on:click={() => (activeAnimTab = "crafting")}
+        >
+          <span class="tri-check" on:click|stopPropagation={() => toggleAnimGroup(craftingAnimNames)}>
+            {#if craftingAnimNames.length > 0 && craftingSelectedCount === craftingAnimNames.length}
+              <Fa icon={faCheck} size="xs" />
+            {:else if craftingSelectedCount > 0}
+              <Fa icon={faMinus} size="xs" />
+            {/if}
+          </span>
+          Crafting{craftingSelectedCount ? ` (${craftingSelectedCount})` : ""}
+        </button>
+      </div>
+      <!-- Tab content -->
+      {#if activeAnimTab === "weapons"}
+        <ul class="anim-list">
+          {#each weaponsFolder.filter((x) => !x.name?.includes("harged")) as { name, children }}
+            {#if name && children}
+              <li>
+                <span class="anim-category">{name?.replaceAll("_", " ")}</span>
+                <ul class="anim-children">
+                  {#each getWeaponsEntries(children) as weapon}
+                    <li>
+                      <button
+                        class="anim-item"
+                        class:selected={weapon.name && selectedAnimations.value.includes(weapon.name)}
+                        on:click={() => selectWeapon(weapon.name)}
+                      ><span class="anim-check">{#if weapon.name && selectedAnimations.value.includes(weapon.name)}<Fa icon={faCheck} size="xs" />{/if}</span>{weapon.name}</button>
+                    </li>
+                  {/each}
+                </ul>
+              </li>
+            {/if}
+          {/each}
+          {#each addonsFolder.filter((x) => !x.name?.includes("Diag")) as { name, children }}
+            {#if name && children}
+              <li>
+                <span class="anim-category">{name?.replaceAll("_", " ")}</span>
+                <ul class="anim-children">
+                  {#each getWeaponsEntries(children) as weapon}
+                    <li>
+                      <button
+                        class="anim-item"
+                        class:selected={weapon.name && selectedAnimations.value.includes(weapon.name)}
+                        on:click={() => selectWeapon(weapon.name)}
+                      ><span class="anim-check">{#if weapon.name && selectedAnimations.value.includes(weapon.name)}<Fa icon={faCheck} size="xs" />{/if}</span>{weapon.name}</button>
+                    </li>
+                  {/each}
+                </ul>
+              </li>
+            {/if}
+          {/each}
+        </ul>
+      {:else}
+        <ul class="anim-list">
+          {#each [crafting1Folder, crafting2Folder] as folder}
+            {#each folder.filter((x) => x.name?.includes("Prof") && x?.children) as { name, children }}
+              {#if name && children}
+                <li>
+                  <span class="anim-category">{name?.replaceAll("_", " ")}</span>
+                  <ul class="anim-children">
+                    {#each getWeaponsEntries(children).filter(findCharacterFolder) as weapon}
+                      <li>
+                        <button
+                          class="anim-item"
+                          class:selected={weapon.name && selectedAnimations.value.includes(weapon.name)}
                           on:click={() => selectWeapon(weapon.name)}
-                          >{weapon.name}</Chip
-                        >
-                      {/each}
-                    {/if}
-                  </Group>
-                </Card>
-              {/each}
-            </div>
-            <Button
-              color="gray"
-              on:click={selectUnarmedDir}
-              style="background:{addonsDir.value ? '' : 'red'};width:100%"
-            >
-              <Fa slot="leftIcon" icon={faFolderOpen} />
-              Select source directory<br />(Addons)
-            </Button>
-            <div style="display:grid;gap:1rem;grid-template-columns:1fr 1fr">
-              {#each addonsFolder.filter((x) => !x.name?.includes("Diag")) as { name, children }}
-                <Card shadow="sm" padding="md">
-                  <Card.Section first padding="xs">
-                    <h4>
-                      {name?.replaceAll("_", " ")}
-                    </h4>
-                  </Card.Section>
-                  <Group spacing="xs" direction="column">
-                    {#if name && children}
-                      {#each getWeaponsEntries(children) as weapon}
-                        <Chip
-                          size="xs"
-                          variant="filled"
-                          checked={weapon.name &&
-                            selectedAnimations.value.includes(weapon.name)}
-                          on:click={() => selectWeapon(weapon.name)}
-                          >{weapon.name}</Chip
-                        >
-                      {/each}
-                    {/if}
-                  </Group>
-                </Card>
-              {/each}
-            </div>
-          </div>
-        </Tabs.Tab>
-        <!-- !CRAFTING -->
-        <Tabs.Tab label="Crafting">
-          <div style="display:flex;gap:0.5rem;flex-direction:column">
-            {#each crafting as [dir, nb, select, folder]}
-              <Button
-                color="gray"
-                on:click={select}
-                style="background:{dir.value ? '' : 'red'};width:100%"
-              >
-                <Fa slot="leftIcon" icon={faFolderOpen} />
-                Select source directory<br />(Crafting {nb})
-              </Button>
-
-              <div style="display:grid;gap:1rem;grid-template-columns:1fr 1fr">
-                {#each folder.filter((x) => x.name?.includes("Prof") && x?.children) as { name, children }}
-                  <Card shadow="sm" padding="md">
-                    <Card.Section first padding="xs">
-                      <h4>
-                        {name?.replaceAll("_", " ")}
-                      </h4>
-                    </Card.Section>
-                    <Group spacing="xs" direction="column">
-                      {#if name && children}
-                        {#each getWeaponsEntries(children).filter(findCharacterFolder) as weapon}
-                          <Chip
-                            size="xs"
-                            variant="filled"
-                            checked={weapon.name &&
-                              selectedAnimations.value.includes(weapon.name)}
-                            on:click={() => selectWeapon(weapon.name)}
-                            >{weapon.name}</Chip
-                          >
-                        {/each}
-                      {/if}
-                    </Group>
-                  </Card>
-                {/each}
-              </div>
+                        ><span class="anim-check">{#if weapon.name && selectedAnimations.value.includes(weapon.name)}<Fa icon={faCheck} size="xs" />{/if}</span>{weapon.name}</button>
+                      </li>
+                    {/each}
+                  </ul>
+                </li>
+              {/if}
             {/each}
-          </div>
-        </Tabs.Tab>
-      </Tabs>
-    </div>
+          {/each}
+        </ul>
+      {/if}
+    </GenerationDrawer>
   </div>
+
+  {#if layerTooltip}
+    <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+    <div
+      class="layer-popover"
+      style="left:{layerTooltip.x}px;top:{layerTooltip.y}px;"
+      on:click|stopPropagation
+    >
+      <div class="layer-popover-breadcrumb">
+        <span class="layer-popover-tab">{layerTooltip.tab}</span>
+        <span class="layer-popover-sep">&rsaquo;</span>
+        <span class="layer-popover-category">{layerTooltip.category}</span>
+        <span class="layer-popover-sep">&rsaquo;</span>
+        <span class="layer-popover-item">{layerTooltip.item}</span>
+      </div>
+      <div class="layer-popover-path-row">
+        <span class="layer-popover-path">{layerTooltip.fullPath}</span>
+        <button class="layer-popover-copy" on:click|stopPropagation={copyLayerPath} title="Copy path">
+          {#if layerTooltip.copied}
+            <Fa icon={faCheck} size="xs" />
+          {:else}
+            <Fa icon={faCopy} size="xs" />
+          {/if}
+        </button>
+      </div>
+    </div>
+  {/if}
 </SvelteUIProvider>
 
 <style global>
@@ -914,5 +1157,334 @@
     ) {
     text-decoration: underline;
     font-weight: bold;
+  }
+
+  /* Layout */
+  .app-layout {
+    position: relative;
+    height: calc(100vh - 2rem);
+  }
+  .center-section {
+    height: 100%;
+    margin-left: 280px;
+    margin-right: 300px;
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem;
+    gap: 0.75rem;
+    overflow: hidden;
+  }
+
+  /* Top bar */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+  }
+  .name-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1;
+    justify-content: center;
+  }
+  .dice-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--theme-border);
+    border-radius: 6px;
+    background: var(--theme-secondary-btn);
+    color: var(--theme-accent);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .dice-btn:hover {
+    background: var(--theme-secondary-btn-hover);
+    color: var(--theme-accent);
+  }
+
+  /* Panels */
+  .panels {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 350px 550px auto;
+    gap: 0.75rem;
+    min-height: 0;
+  }
+  .panel {
+    background: var(--theme-panel-bg);
+    border: 1px solid var(--theme-border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .items-panel {
+    overflow-y: auto;
+  }
+  .preview-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .layers-panel {
+    min-width: 120px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .layers-header {
+    padding: 0.5rem;
+    flex-shrink: 0;
+  }
+  .layers-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.25rem 0.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .layer-item {
+    position: relative;
+    display: grid;
+    place-items: center;
+    background: var(--theme-panel-bg);
+    border: 1px solid var(--theme-border);
+    border-radius: 8px;
+    padding: 0.4rem;
+    cursor: pointer;
+  }
+  .layer-remove {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--theme-border);
+    border-radius: 50%;
+    background: var(--theme-panel-bg);
+    color: var(--theme-text-secondary);
+    cursor: pointer;
+    z-index: 1;
+    transition: background 0.15s, color 0.15s;
+  }
+  .layer-remove:hover {
+    background: var(--theme-error);
+    color: var(--theme-primary-btn-text);
+    border-color: var(--theme-error);
+  }
+
+  .layer-popover {
+    position: fixed;
+    transform: translate(-50%, calc(-100% - 8px));
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.45rem 0.65rem;
+    background: var(--theme-panel-bg);
+    border: 1px solid var(--theme-border-light, var(--theme-border));
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    white-space: nowrap;
+    user-select: text;
+    cursor: default;
+  }
+  .layer-popover-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .layer-popover-tab {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--theme-accent, var(--theme-text-secondary));
+  }
+  .layer-popover-category {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--theme-text-secondary);
+  }
+  .layer-popover-sep {
+    font-size: 0.85rem;
+    color: var(--theme-text-secondary);
+    opacity: 0.5;
+  }
+  .layer-popover-item {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--theme-text-primary);
+  }
+  .layer-popover-path-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-top: 1px solid var(--theme-border);
+    padding-top: 0.3rem;
+  }
+  .layer-popover-path {
+    font-size: 0.65rem;
+    color: var(--theme-text-secondary);
+    opacity: 0.75;
+    user-select: text;
+    cursor: text;
+  }
+  .layer-popover-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--theme-text-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .layer-popover-copy:hover {
+    background: var(--theme-border);
+    color: var(--theme-text-primary);
+  }
+
+  /* Section headings in drawers */
+  .section-heading-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.75rem 0 0.5rem 0;
+  }
+  .section-heading {
+    margin: 0.75rem 0 0.5rem 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--theme-text-primary);
+  }
+
+  /* Tri-state checkbox */
+  .tri-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--theme-border-light);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--theme-accent);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .tri-check:hover {
+    border-color: var(--theme-accent);
+    background: var(--theme-panel-bg-light);
+  }
+
+  /* Custom animation tabs */
+  .anim-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--theme-border);
+    margin-bottom: 0.5rem;
+  }
+  .anim-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--theme-text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .anim-tab:hover {
+    color: var(--theme-text-primary);
+  }
+  .radio-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--theme-text-primary);
+    cursor: pointer;
+  }
+
+  .anim-tab.active {
+    color: var(--theme-text-primary);
+    border-bottom-color: var(--theme-accent);
+  }
+
+  /* Animation tree list */
+  .anim-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .anim-list > li {
+    margin-bottom: 0.5rem;
+  }
+  .anim-category {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--theme-text-secondary);
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--theme-border);
+    margin-bottom: 0.2rem;
+  }
+  .anim-children {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .anim-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    text-align: left;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--theme-text-primary);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .anim-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    flex-shrink: 0;
+  }
+  .anim-item:hover {
+    background: var(--theme-panel-bg-light);
+  }
+  .anim-item.selected {
+    background: var(--theme-primary-btn);
+    color: var(--theme-primary-btn-text);
+  }
+  .anim-item.selected:hover {
+    background: var(--theme-primary-btn-hover);
   }
 </style>

@@ -37,8 +37,8 @@
 						style="background:{selected.some(
 							(x) => x.path === item.path
 						)
-							? 'var(--svelteui-colors-dark500)'
-							: 'var(--svelteui-colors-dark700)'}"
+							? 'var(--theme-selected)'
+							: 'var(--theme-panel-bg)'}"
 					>
 						<Card.Section first padding="xs">
 							<UnstyledButton

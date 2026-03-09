@@ -1,3 +1,5 @@
+import { writable } from "svelte/store";
+
 export interface FileEntry {
 	name: string;
 	path: string;
@@ -6,6 +8,9 @@ export interface FileEntry {
 
 // Global map of relative path -> FileSystemFileHandle
 const fileHandles = new Map<string, FileSystemFileHandle>();
+
+// Reactive signal that bumps whenever directories finish loading
+export const filesReady = writable(0);
 
 export async function pickDirectory(mode: FileSystemPermissionMode = "read"): Promise<FileSystemDirectoryHandle | null> {
 	try {
@@ -38,6 +43,11 @@ export async function readDirectory(
 		if (!a.children && b.children) return 1;
 		return (a.name || "").localeCompare(b.name || "");
 	});
+
+	// Only signal at the top-level call (not recursive children)
+	if (!basePath) {
+		filesReady.update((n) => n + 1);
+	}
 
 	return entries;
 }
