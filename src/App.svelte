@@ -803,9 +803,79 @@
     }
   };
   const randomizeName = () => {
-    const prefixes = ["Ael", "Bor", "Cael", "Dar", "El", "Fen", "Gor", "Hal", "Ith", "Jar", "Kel", "Lor", "Mor", "Nar", "Orin", "Per", "Ren", "Sor", "Tor", "Val", "Wyr", "Zeph"];
-    const suffixes = ["an", "ith", "or", "us", "en", "ar", "is", "on", "iel", "ath", "ir", "ak", "im", "os", "wyn", "dor", "ric", "thar", "ven"];
-    characterName.value = prefixes[Math.floor(Math.random() * prefixes.length)] + suffixes[Math.floor(Math.random() * suffixes.length)];
+    const pick = <T>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+    const coin = () => Math.random() < 0.5;
+
+    // Onset clusters and single consonants
+    const onsets = [
+      "B","Br","C","Ch","Cr","D","Dr","F","Fl","Fr","G","Gl","Gr",
+      "H","J","K","Kh","Kr","L","M","N","P","Ph","Pr","Q","R",
+      "S","Sc","Sh","Sk","Sl","Sm","Sn","St","Str","Sv","Sw",
+      "T","Th","Tr","Tw","V","Vr","W","Wr","X","Y","Z","Zh",
+    ];
+    // Vowel nuclei (including diphthongs)
+    const vowels = [
+      "a","e","i","o","u","ae","ai","au","ea","ei","ia","ie","io",
+      "oa","oe","ou","ue","y","ay","ey",
+    ];
+    // Coda consonants
+    const codas = [
+      "b","c","ck","d","dh","f","g","k","l","ll","lm","ln","ls","lt",
+      "m","n","nd","ng","nk","nn","ns","nt","p","r","rc","rd","rg",
+      "rk","rm","rn","rp","rs","rt","rv","rz","s","sh","sk","ss","st",
+      "t","th","v","x","z",
+    ];
+    // Linking consonants for middle syllables
+    const mids = [
+      "b","br","c","ch","cr","d","dr","f","fr","g","gr","k","kr",
+      "l","ldr","ll","m","mb","n","nd","ng","nn","p","ph","r","rr",
+      "s","sh","st","str","t","th","tr","v","vr","w","x","z","zh",
+    ];
+    // Common fantasy suffixes for final syllable flavor
+    const endings = [
+      "an","en","in","on","un","ar","er","ir","or","ur",
+      "ath","eth","ith","oth","as","es","is","os","us",
+      "ael","iel","ael","wen","wyn","dor","mir","ric","thar",
+      "ven","dal","grim","hard","mund","rak","zul","nir","vyn",
+      "ax","ox","ux","al","el","il","ol","ak","ek","ik","ok","uk",
+    ];
+    // Titles and epithets
+    const titles = [
+      "the Bold","the Brave","the Cunning","the Dark","the Elder",
+      "the Fair","the Grim","the Humble","the Iron","the Just",
+      "the Kind","the Lost","the Mad","the Noble","the Old",
+      "the Pale","the Quick","the Red","the Silent","the Tall",
+      "the Undying","the Vile","the Wanderer","the Young",
+      "Blackthorn","Brightblade","Coldforge","Dawnwalker",
+      "Emberhand","Frostborn","Goldmane","Hollowbone",
+      "Ironvow","Ashwhisper","Stormcaller","Nighthollow",
+      "Moonveil","Thornweald","Shadowmere","Wyrmsbane",
+    ];
+
+    // Build 2-3 syllables
+    const syllableCount = coin() ? 2 : 3;
+    let name = pick(onsets) + pick(vowels);
+
+    for (let i = 1; i < syllableCount; i++) {
+      if (i < syllableCount - 1) {
+        // Middle syllable
+        name += pick(mids) + pick(vowels);
+      } else {
+        // Final syllable — use a fantasy ending or a constructed one
+        if (coin()) {
+          name += pick(endings);
+        } else {
+          name += pick(mids) + pick(vowels) + (coin() ? pick(codas) : "");
+        }
+      }
+    }
+
+    // Occasionally add a title/epithet (~30%)
+    if (Math.random() < 0.3) {
+      name += " " + pick(titles);
+    }
+
+    characterName.value = name;
   };
   const randomSingle = (files: FileEntry[] | undefined, piece: string) => {
     if (!files) return;
