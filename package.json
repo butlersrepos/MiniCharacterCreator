@@ -5,14 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^2.4.2",
-
     "@tsconfig/svelte": "^5.0.0",
     "svelte": "^4.2.1",
     "svelte-check": "^3.4.6",
@@ -24,7 +22,7 @@
     "@fortawesome/free-solid-svg-icons": "^6.4.2",
     "@svelteuidev/composables": "^0.15.3",
     "@svelteuidev/core": "^0.15.3",
-
+    "jszip": "^3.10.1",
     "svelte-fa": "^3.0.4"
   },
   "packageManager": "pnpm@10.8.0+sha512.0e82714d1b5b43c74610193cb20734897c1d00de89d0e18420aebc5977fa13d780a9cb05734624e81ebd81cc876cd464794850641c48b9544326b5622ca29971"

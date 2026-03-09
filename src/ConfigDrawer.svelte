@@ -18,6 +18,7 @@
     links: { label: string; url: string }[];
     value: string;
     required: boolean;
+    stale?: boolean;
     onSelect: () => void;
   }
 
@@ -26,7 +27,7 @@
   export let directories: DirectoryEntry[] = [];
 
   const expandedState = localStorageData("configDrawerExpanded", true);
-  let expanded = expandedState.value;
+  export let expanded = expandedState.value;
   $: expandedState.value = expanded;
   let openTooltip: string | null = null;
 
@@ -34,9 +35,10 @@
     openTooltip = openTooltip === key ? null : key;
   };
 
+  $: hasStale = directories.some((d) => d.stale);
   $: hasError = directories.some((d) => d.required && !d.value);
   $: hasWarning =
-    !hasError && directories.some((d) => !d.required && !d.value);
+    hasStale || (!hasError && directories.some((d) => !d.required && !d.value));
 </script>
 
 <svelte:window on:click={() => (openTooltip = null)} />
@@ -61,8 +63,13 @@
     </div>
 
     <div class="drawer-content">
+      {#if hasStale}
+        <div class="stale-banner">
+          Your browser doesn't persist folder access between sessions. Re-select the folders below to continue.
+        </div>
+      {/if}
       {#each directories as dir}
-        <div class="entry" class:error={dir.required && !dir.value}>
+        <div class="entry" class:error={dir.required && !dir.value} class:stale={dir.stale}>
           <div class="entry-header">
             <span class="entry-label">{dir.label}</span>
 
@@ -77,7 +84,9 @@
                 </button>
               {/if}
 
-              {#if !dir.value}
+              {#if dir.stale}
+                <span title="Needs re-selection"><Fa icon={faTriangleExclamation} color="var(--theme-warning)" size="sm" /></span>
+              {:else if !dir.value}
                 {#if dir.required}
                   <span title="Required"><Fa icon={faCircleExclamation} color="var(--theme-error)" size="sm" /></span>
                 {:else}
@@ -115,9 +124,15 @@
             </div>
           {/if}
 
-          <div class="entry-value">
-            {dir.value || "Not configured"}
-          </div>
+          {#if dir.stale}
+            <div class="entry-value not-configured">
+              Re-select <strong>{dir.value}</strong>
+            </div>
+          {:else}
+            <div class="entry-value" class:not-configured={!dir.value}>
+              {dir.value || "Not configured"}
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
@@ -218,6 +233,20 @@
     letter-spacing: 0.05em;
   }
 
+  /* Stale banner */
+  .stale-banner {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--theme-border);
+    background: var(--theme-panel-bg);
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: var(--theme-warning);
+    font-style: italic;
+  }
+  .entry.stale {
+    border-left: 2px solid var(--theme-warning);
+  }
+
   /* Entries */
   .drawer-content {
     flex: 1;
@@ -255,6 +284,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .entry-value.not-configured {
+    color: var(--theme-warning);
+    font-style: italic;
+  }
+  /* Also available globally as .hint-unconfigured in app.css */
 
   /* Buttons */
   .icon-btn {

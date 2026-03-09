@@ -9,9 +9,13 @@
   import { applyTheme, theme } from "./theme";
   import {
     type FileEntry,
+    hasNativeFS,
     pickDirectory,
+    pickDirectoryFallback,
+    buildTreeFromFiles,
     readDirectory,
     saveFile,
+    saveAsZip,
     storeHandle,
     tryRestoreHandle,
   } from "./fileSystem";
@@ -55,6 +59,12 @@
   >("selected", []);
 
   const characterName = localStorageData("characterName", "");
+
+  // Track drawer expanded state for reactive margins
+  let leftDrawerExpanded = localStorageData("configDrawerExpanded", true).value;
+  let rightDrawerExpanded = localStorageData("generationDrawerExpanded", true).value;
+  $: leftMargin = leftDrawerExpanded ? 280 : 36;
+  $: rightMargin = rightDrawerExpanded ? 300 : 36;
   const targetDirectory = localStorageData("targetDir", "");
 
   let rootFolder: FileEntry[] = [];
@@ -79,10 +89,8 @@
     rootFolder = await readDirectory(rootDirHandle);
   };
 
-  const loadWeapons = async () => {
-    if (!weaponsDirHandle) return;
-    const loadedWeapons = await readDirectory(weaponsDirHandle);
-    weaponsFolder = loadedWeapons.map((x) => {
+  const transformWeapons = (loaded: FileEntry[]): FileEntry[] =>
+    loaded.map((x) => {
       if (x.name?.includes("Swing")) {
         const newChildren = x.children?.map((c) => {
           if (c.name?.includes(".png")) {
@@ -96,11 +104,15 @@
           }
           return c;
         }) as FileEntry[];
-
         return { ...x, children: newChildren };
       }
       return x;
     });
+
+  const loadWeapons = async () => {
+    if (!weaponsDirHandle) return;
+    const loadedWeapons = await readDirectory(weaponsDirHandle);
+    weaponsFolder = transformWeapons(loadedWeapons);
   };
   const loadCrafting1 = async () => {
     if (!crafting1DirHandle) return;
@@ -149,63 +161,117 @@
   });
 
   const selectRootDirectory = async () => {
-    const handle = await pickDirectory();
-    if (handle) {
-      if (handle.name === "Generic_NPCs") {
-        rootDirHandle = handle;
-        rootDir.value = handle.name;
-        await storeHandle("root", handle);
-        loadTree();
-      } else {
-        alert(
-          'The source directory is the one named "Generic_NPCs" and contain the animation folders',
-        );
+    if (hasNativeFS) {
+      const handle = await pickDirectory();
+      if (handle) {
+        if (handle.name === "Generic_NPCs") {
+          rootDirHandle = handle;
+          rootDir.value = handle.name;
+          await storeHandle("root", handle);
+          loadTree();
+        } else {
+          alert(
+            'The source directory is the one named "Generic_NPCs" and contain the animation folders',
+          );
+        }
+      }
+    } else {
+      const result = await pickDirectoryFallback();
+      if (result) {
+        if (result.name === "Generic_NPCs") {
+          rootDir.value = result.name;
+          rootFolder = buildTreeFromFiles(result.files, result.name);
+        } else {
+          alert(
+            'The source directory is the one named "Generic_NPCs" and contain the animation folders',
+          );
+        }
       }
     }
   };
   const selectWeaponsDir = async () => {
-    const handle = await pickDirectory();
-    if (handle) {
-      if (handle.name === "Minifantasy_Weapons_Assets") {
-        weaponsDirHandle = handle;
-        weaponsDir.value = handle.name;
-        await storeHandle("weapons", handle);
-        loadWeapons();
-      } else {
-        alert(
-          'The source directory is the one named "Minifantasy_Weapons_Assets"',
-        );
+    if (hasNativeFS) {
+      const handle = await pickDirectory();
+      if (handle) {
+        if (handle.name === "Minifantasy_Weapons_Assets") {
+          weaponsDirHandle = handle;
+          weaponsDir.value = handle.name;
+          await storeHandle("weapons", handle);
+          loadWeapons();
+        } else {
+          alert(
+            'The source directory is the one named "Minifantasy_Weapons_Assets"',
+          );
+        }
+      }
+    } else {
+      const result = await pickDirectoryFallback();
+      if (result) {
+        if (result.name === "Minifantasy_Weapons_Assets") {
+          weaponsDir.value = result.name;
+          const loaded = buildTreeFromFiles(result.files, result.name);
+          weaponsFolder = transformWeapons(loaded);
+        } else {
+          alert(
+            'The source directory is the one named "Minifantasy_Weapons_Assets"',
+          );
+        }
       }
     }
   };
   const selectCrafting1Dir = async () => {
-    const handle = await pickDirectory();
-    if (handle) {
-      crafting1DirHandle = handle;
-      crafting1Dir.value = handle.name;
-      await storeHandle("crafting1", handle);
-      loadCrafting1();
+    if (hasNativeFS) {
+      const handle = await pickDirectory();
+      if (handle) {
+        crafting1DirHandle = handle;
+        crafting1Dir.value = handle.name;
+        await storeHandle("crafting1", handle);
+        loadCrafting1();
+      }
+    } else {
+      const result = await pickDirectoryFallback();
+      if (result) {
+        crafting1Dir.value = result.name;
+        crafting1Folder = buildTreeFromFiles(result.files, result.name);
+      }
     }
   };
   const selectCrafting2Dir = async () => {
-    const handle = await pickDirectory();
-    if (handle) {
-      crafting2DirHandle = handle;
-      crafting2Dir.value = handle.name;
-      await storeHandle("crafting2", handle);
-      loadCrafting2();
+    if (hasNativeFS) {
+      const handle = await pickDirectory();
+      if (handle) {
+        crafting2DirHandle = handle;
+        crafting2Dir.value = handle.name;
+        await storeHandle("crafting2", handle);
+        loadCrafting2();
+      }
+    } else {
+      const result = await pickDirectoryFallback();
+      if (result) {
+        crafting2Dir.value = result.name;
+        crafting2Folder = buildTreeFromFiles(result.files, result.name);
+      }
     }
   };
   const selectUnarmedDir = async () => {
-    const handle = await pickDirectory();
-    if (handle) {
-      addonsDirHandle = handle;
-      addonsDir.value = handle.name;
-      await storeHandle("addons", handle);
-      loadAddons();
+    if (hasNativeFS) {
+      const handle = await pickDirectory();
+      if (handle) {
+        addonsDirHandle = handle;
+        addonsDir.value = handle.name;
+        await storeHandle("addons", handle);
+        loadAddons();
+      }
+    } else {
+      const result = await pickDirectoryFallback();
+      if (result) {
+        addonsDir.value = result.name;
+        addonsFolder = buildTreeFromFiles(result.files, result.name);
+      }
     }
   };
   const selectTargetDir = async () => {
+    if (!hasNativeFS) return; // Fallback uses zip download instead
     const handle = await pickDirectory("readwrite");
     if (handle) {
       targetDirHandle = handle;
@@ -244,20 +310,26 @@
     selected.value = ev.detail;
   };
 
+  const canvasToBlob = (buffer: HTMLCanvasElement): Promise<Blob | null> =>
+    new Promise((res) => buffer.toBlob(res, "png"));
+
+  // Pending blobs for zip fallback — collected during generation, flushed at the end
+  let pendingZipFiles: { name: string; data: Blob }[] = [];
+
   const saveBuffer = async (
     buffer: HTMLCanvasElement,
     name: string = "NPC",
   ) => {
-    if (!targetDirHandle) {
-      await selectTargetDir();
-    }
-    if (targetDirHandle) {
-      const blob = await new Promise<Blob | null>((res) =>
-        buffer.toBlob(res, "png"),
-      );
-      if (blob) {
+    const blob = await canvasToBlob(buffer);
+    if (!blob) return;
+
+    if (hasNativeFS) {
+      if (!targetDirHandle) await selectTargetDir();
+      if (targetDirHandle) {
         await saveFile(targetDirHandle, name + ".png", blob);
       }
+    } else {
+      pendingZipFiles.push({ name: name + ".png", data: blob });
     }
   };
   $: race = selected.value
@@ -350,6 +422,7 @@
 
   const generateSprites = async () => {
     loading = true;
+    pendingZipFiles = [];
     const individualSprites: HTMLCanvasElement[] = [];
     const animations = rootFolder.filter((folder) => folder.children);
     if (!selected.value.some((x) => x.path.includes("_Character"))) {
@@ -401,8 +474,13 @@
     for (let i = 0; i < individualSprites.length; i++) {
       await saveBuffer(
         individualSprites[i],
-        characterName.value + animations[i].name,
+        (characterName.value || "NPC") + animations[i].name,
       );
+    }
+    // On fallback browsers, flush all collected sprites (including weapons) as a zip
+    if (!hasNativeFS && pendingZipFiles.length) {
+      await saveAsZip(pendingZipFiles, (characterName.value || "sprites") + ".zip");
+      pendingZipFiles = [];
     }
     loading = false;
     finished = true;
@@ -604,17 +682,19 @@
       ],
       value: rootDir.value,
       required: true,
+      stale: !hasNativeFS && !!rootDir.value && rootFolder.length === 0,
       onSelect: selectRootDirectory,
     },
-    {
+    ...(hasNativeFS ? [{
       key: "target",
       label: "Output Directory",
       description: "Choose where generated sprite sheets will be saved.",
-      links: [],
+      links: [] as { label: string; url: string }[],
       value: targetDirectory.value,
       required: true,
+      stale: false,
       onSelect: selectTargetDir,
-    },
+    }] : []),
     {
       key: "weapons",
       label: "Weapon Assets",
@@ -628,6 +708,7 @@
       ],
       value: weaponsDir.value,
       required: false,
+      stale: !hasNativeFS && !!weaponsDir.value && weaponsFolder.length === 0,
       onSelect: selectWeaponsDir,
     },
     {
@@ -647,11 +728,12 @@
       ],
       value: addonsDir.value,
       required: false,
+      stale: !hasNativeFS && !!addonsDir.value && addonsFolder.length === 0,
       onSelect: selectUnarmedDir,
     },
     {
       key: "crafting1",
-      label: "Crafting I",
+      label: "Crafting I Assets",
       description: "Crafting & Professions I animation pack.",
       links: [
         {
@@ -661,11 +743,12 @@
       ],
       value: crafting1Dir.value,
       required: false,
+      stale: !hasNativeFS && !!crafting1Dir.value && crafting1Folder.length === 0,
       onSelect: selectCrafting1Dir,
     },
     {
       key: "crafting2",
-      label: "Crafting II",
+      label: "Crafting II Assets",
       description: "Crafting & Professions II animation pack.",
       links: [
         {
@@ -675,6 +758,7 @@
       ],
       value: crafting2Dir.value,
       required: false,
+      stale: !hasNativeFS && !!crafting2Dir.value && crafting2Folder.length === 0,
       onSelect: selectCrafting2Dir,
     },
   ];
@@ -964,8 +1048,11 @@
     </div>
   </Popper>
   <div class="app-layout">
-    <ConfigDrawer directories={directoryConfigs} />
-    <div class="center-section">
+    <ConfigDrawer
+      bind:expanded={leftDrawerExpanded}
+      directories={directoryConfigs}
+    />
+    <div class="center-section" style="margin-left:{leftMargin}px;margin-right:{rightMargin}px;">
       <!-- TOP BAR -->
       <div class="top-bar">
         <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
@@ -1066,7 +1153,7 @@
     </div> <!-- /panels -->
     </div> <!-- /center-section -->
     <!-- GENERATION DRAWER (right side) -->
-    <GenerationDrawer>
+    <GenerationDrawer bind:expanded={rightDrawerExpanded}>
       <Button on:click={generateSprites} style="width:100%;margin-bottom:0.75rem">
         <Fa
           slot="leftIcon"
@@ -1121,53 +1208,16 @@
       </div>
       <!-- Tab content -->
       {#if activeAnimTab === "weapons"}
-        <ul class="anim-list">
-          {#each weaponsFolder.filter((x) => !x.name?.includes("harged")) as { name, children }}
-            {#if name && children}
-              <li>
-                <span class="anim-category">{name?.replaceAll("_", " ")}</span>
-                <ul class="anim-children">
-                  {#each getWeaponsEntries(children) as weapon}
-                    <li>
-                      <button
-                        class="anim-item"
-                        class:selected={weapon.name && selectedAnimations.value.includes(weapon.name)}
-                        on:click={() => selectWeapon(weapon.name)}
-                      ><span class="anim-check">{#if weapon.name && selectedAnimations.value.includes(weapon.name)}<Fa icon={faCheck} size="xs" />{/if}</span>{weapon.name}</button>
-                    </li>
-                  {/each}
-                </ul>
-              </li>
-            {/if}
-          {/each}
-          {#each addonsFolder.filter((x) => !x.name?.includes("Diag")) as { name, children }}
-            {#if name && children}
-              <li>
-                <span class="anim-category">{name?.replaceAll("_", " ")}</span>
-                <ul class="anim-children">
-                  {#each getWeaponsEntries(children) as weapon}
-                    <li>
-                      <button
-                        class="anim-item"
-                        class:selected={weapon.name && selectedAnimations.value.includes(weapon.name)}
-                        on:click={() => selectWeapon(weapon.name)}
-                      ><span class="anim-check">{#if weapon.name && selectedAnimations.value.includes(weapon.name)}<Fa icon={faCheck} size="xs" />{/if}</span>{weapon.name}</button>
-                    </li>
-                  {/each}
-                </ul>
-              </li>
-            {/if}
-          {/each}
-        </ul>
-      {:else}
-        <ul class="anim-list">
-          {#each [crafting1Folder, crafting2Folder] as folder}
-            {#each folder.filter((x) => x.name?.includes("Prof") && x?.children) as { name, children }}
+        {#if !weaponsFolder.length && !addonsFolder.length}
+          <p class="hint-unconfigured">Please configure Weapon Assets to see animations.</p>
+        {:else}
+          <ul class="anim-list">
+            {#each weaponsFolder.filter((x) => !x.name?.includes("harged")) as { name, children }}
               {#if name && children}
                 <li>
                   <span class="anim-category">{name?.replaceAll("_", " ")}</span>
                   <ul class="anim-children">
-                    {#each getWeaponsEntries(children).filter(findCharacterFolder) as weapon}
+                    {#each getWeaponsEntries(children) as weapon}
                       <li>
                         <button
                           class="anim-item"
@@ -1180,8 +1230,53 @@
                 </li>
               {/if}
             {/each}
-          {/each}
-        </ul>
+            {#each addonsFolder.filter((x) => !x.name?.includes("Diag")) as { name, children }}
+              {#if name && children}
+                <li>
+                  <span class="anim-category">{name?.replaceAll("_", " ")}</span>
+                  <ul class="anim-children">
+                    {#each getWeaponsEntries(children) as weapon}
+                      <li>
+                        <button
+                          class="anim-item"
+                          class:selected={weapon.name && selectedAnimations.value.includes(weapon.name)}
+                          on:click={() => selectWeapon(weapon.name)}
+                        ><span class="anim-check">{#if weapon.name && selectedAnimations.value.includes(weapon.name)}<Fa icon={faCheck} size="xs" />{/if}</span>{weapon.name}</button>
+                      </li>
+                    {/each}
+                  </ul>
+                </li>
+              {/if}
+            {/each}
+          </ul>
+        {/if}
+      {:else}
+        {#if !crafting1Folder.length && !crafting2Folder.length}
+          <p class="hint-unconfigured">Please configure Crafting Assets to see animations.</p>
+        {:else}
+          <ul class="anim-list">
+            {#each [crafting1Folder, crafting2Folder] as folder}
+              {#each folder.filter((x) => x.name?.includes("Prof") && x?.children) as { name, children }}
+                {#if name && children}
+                  <li>
+                    <span class="anim-category">{name?.replaceAll("_", " ")}</span>
+                    <ul class="anim-children">
+                      {#each getWeaponsEntries(children).filter(findCharacterFolder) as weapon}
+                        <li>
+                          <button
+                            class="anim-item"
+                            class:selected={weapon.name && selectedAnimations.value.includes(weapon.name)}
+                            on:click={() => selectWeapon(weapon.name)}
+                          ><span class="anim-check">{#if weapon.name && selectedAnimations.value.includes(weapon.name)}<Fa icon={faCheck} size="xs" />{/if}</span>{weapon.name}</button>
+                        </li>
+                      {/each}
+                    </ul>
+                  </li>
+                {/if}
+              {/each}
+            {/each}
+          </ul>
+        {/if}
       {/if}
     </GenerationDrawer>
   </div>
@@ -1236,13 +1331,12 @@
   }
   .center-section {
     height: 100%;
-    margin-left: 280px;
-    margin-right: 300px;
     display: flex;
     flex-direction: column;
     padding: 0.75rem;
     gap: 0.75rem;
     overflow: hidden;
+    transition: margin 0.2s ease;
   }
 
   /* Top bar */
@@ -1281,7 +1375,7 @@
   .panels {
     flex: 1;
     display: grid;
-    grid-template-columns: 350px 550px auto;
+    grid-template-columns: 350px minmax(550px, 1fr) 120px;
     gap: 0.75rem;
     min-height: 0;
   }

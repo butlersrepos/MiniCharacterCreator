@@ -4,7 +4,7 @@
   import { localStorageData } from "./localStorageData";
 
   const expandedState = localStorageData("generationDrawerExpanded", true);
-  let expanded = expandedState.value;
+  export let expanded = expandedState.value;
   $: expandedState.value = expanded;
 </script>
 

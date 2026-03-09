@@ -66,3 +66,11 @@ body {
 :root .svelteui-Chip-label.filled.checked:hover {
   background-color: var(--theme-primary-btn-hover) !important;
 }
+
+/* Shared utility: unconfigured / empty state hint */
+.hint-unconfigured {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--theme-warning);
+  padding: 0.5rem 0.25rem;
+}
